@@ -2,13 +2,72 @@ name: Build
 
 on:
   push:
+    branches:
+      - "**"
+    tags:
+      - "v*"
   pull_request:
   workflow_dispatch:
 
 jobs:
+  version:
+    name: Version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      release: ${{ steps.version.outputs.release }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Resolve version
+        id: version
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          if [ "$EVENT_NAME" = "push" ] && [ "$REF_TYPE" = "tag" ]; then
+            echo "version=$REF_NAME" >> "$GITHUB_OUTPUT"
+            echo "release=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          head_tag=$(git tag -l 'v*' --points-at HEAD | head -n 1)
+
+          if [ "$EVENT_NAME" != "push" ] || [ "$REF" != "refs/heads/main" ] || [ -n "$head_tag" ]; then
+            echo "version=dev" >> "$GITHUB_OUTPUT"
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          latest_tag=$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n 1)
+
+          if [ -z "$latest_tag" ]; then
+            echo "version=v1.0.0" >> "$GITHUB_OUTPUT"
+            echo "release=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          latest_version=${latest_tag#v}
+          major_minor=${latest_version%.*}
+          patch=${latest_version##*.}
+          next_patch=$((patch + 1))
+
+          echo "version=v$major_minor.$next_patch" >> "$GITHUB_OUTPUT"
+          echo "release=true" >> "$GITHUB_OUTPUT"
+
   windows:
     name: Windows (x86)
     runs-on: windows-latest
+    needs: version
+    env:
+      PLUGIN_VERSION: ${{ needs.version.outputs.version }}
 
     steps:
       - name: Checkout
@@ -46,7 +105,9 @@ jobs:
     name: Linux (i386)
     runs-on: ubuntu-latest
     container: registry.gitlab.steamos.cloud/steamrt/sniper/sdk
+    needs: version
     env:
+      PLUGIN_VERSION: ${{ needs.version.outputs.version }}
       # GitHub Actions runs job containers as root, and current xmake refuses
       # to do anything as root without this.
       XMAKE_ROOT: y
@@ -89,12 +150,11 @@ jobs:
 
   release:
     name: Release
-    # Rolling release from the default branch only, never from a fork's PR.
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: needs.version.outputs.release == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    needs: [windows, linux]
+    needs: [version, windows, linux]
 
     steps:
       - uses: actions/checkout@v4
@@ -120,16 +180,12 @@ jobs:
           cp csgo-multi-appid.vdf combined/addons/
           (cd combined && zip -r ../releases/csgo-multi-appid.zip .)
 
-      - name: Move the rolling tag
-        run: |
-          git tag -f latest
-          git push -f origin latest
-
       - name: Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: latest
-          name: Latest build
+          tag_name: ${{ needs.version.outputs.version }}
+          name: ${{ needs.version.outputs.version }}
+          target_commitish: ${{ github.sha }}
           files: releases/*
-          generate_release_notes: false
+          generate_release_notes: true
           prerelease: false

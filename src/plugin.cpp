@@ -58,7 +58,7 @@ public:
 
 	virtual void			Pause() {}
 	virtual void			UnPause() {}
-	virtual const char		*GetPluginDescription() { return "csgo-multi-appid"; }
+	virtual const char		*GetPluginDescription() { return "csgo-multi-appid " PLUGIN_VERSION; }
 	virtual void			LevelInit( const char * ) {}
 	virtual void			ServerActivate( void *, int, int ) {}
 	// Only a fallback: when the Think hook is in place this would just be a

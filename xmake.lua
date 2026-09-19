@@ -1,6 +1,8 @@
 add_rules("mode.debug", "mode.release")
 set_languages("cxx17")
 
+local plugin_version = os.getenv("PLUGIN_VERSION") or "dev"
+
 -- The CS:GO dedicated server is 32-bit on both platforms, so the plugin must be
 -- too: xmake f -p windows -a x86   /   xmake f -p linux -a i386
 target("csgo-multi-appid")
@@ -10,6 +12,7 @@ target("csgo-multi-appid")
     add_files("src/*.cpp")
     add_headerfiles("src/*.h")
     add_includedirs("src")
+    add_defines("PLUGIN_VERSION=\"" .. plugin_version .. "\"")
 
     -- No SDK: the one engine interface this plugin implements is mirrored in
     -- plugin.cpp, and tier0's Msg/Warning are resolved at runtime.
