@@ -201,9 +201,15 @@ Steam3Server().SteamGameServer()->HandleIncomingPacket( ... );
 A server whose players are all cross-appid looks like nobody is on it.
 
 So each one is introduced to the engine's session separately, as an
-unauthenticated connection — the documented way to list a player Steam did not
-vet, and what bots were advertised with before `SetBotPlayerCount` existed. The
-SteamID that comes back is remembered against the real one, and
+unauthenticated connection. That is not a trick: it is what the engine does for
+every client Steam cannot vouch for, including its own bots, in
+`CSteam3Server::NotifyLocalClientConnect`:
+
+```cpp
+steamID = SteamGameServer()->CreateUnauthenticatedUserConnection();
+```
+
+The SteamID that comes back is remembered against the real one, and
 `BUpdateUserData` is rewritten to carry it. Count, name and score then come out
 right everywhere, because everything reads that one set.
 
@@ -226,6 +232,31 @@ in `call [edi+0A4h]`, which is `BUpdateUserData` at 41 and fixes the two below
 it. Being deprecated, they may one day stop doing anything; if Steam declines to
 open a connection the plugin says so once and stops asking, and the server is
 left exactly as it was before any of this.
+
+### Which responder answers, and what it costs
+
+None of this is visible while the engine is the one answering. Two cvars decide
+that, and neither is the plugin's to set:
+
+| | `host_info_show 1` | `host_info_show 2` |
+| --- | --- | --- |
+| who writes `A2S_INFO` | the engine | steamclient |
+| player count | humans only, bots excluded | the tracked set, bots included |
+| the same count on the master | never updated, stays at zero | correct |
+
+`2` is what a server that wants to be found should run. The zero at `1` has
+nothing to do with appids — a server with only native players shows it too,
+because the engine answers the query itself and steamclient's record, which is
+what the master listing reflects, never hears about it.
+
+The bots being counted at `2` is the same story from the other end.
+steamclient's count is the size of its tracked set, and the engine's own bots
+are in that set by the call above, so they count as players; the engine's reply
+deliberately skips them (`if ( pi->fakeplayer ) continue;`). Both numbers are
+Valve's, they disagree, and a server with permanent bots looks permanently
+occupied under `2`. Nothing here changes either one: a cross-appid client is
+simply in the tracked set now, the same as a native client and the same as a
+bot.
 
 ## Usage
 
