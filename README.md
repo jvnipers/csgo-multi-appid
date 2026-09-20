@@ -173,6 +173,18 @@ Known limitations, worth understanding before relying on it:
   and per-pipe dispatch (`Steam_BGetCallback` on our pipe only) is what keeps
   the two from interfering, but this is the part to watch first if something
   misbehaves.
+- **Set `sv_reliableavatardata 1`**, or players see each other as the question
+  mark avatar across the appid divide. It defaults to `0`, and at `0` a client
+  resolves other players' avatars through its own Steam client, which only has a
+  stranger's persona cached when Steam thinks they share a context — being on
+  the same game server being the one that would apply. A cross-appid client is
+  not on this server's Steam roster under its real account, because that is the
+  very thing `BeginAuthSession` refused, so neither side gets the other's
+  persona. At `1` the avatar travels as a `CNETMsg_PlayerAvatarData` through the
+  game server instead, keyed by account ID, and the client prefers that over
+  asking Steam. Nothing in that path knows what appid anyone is. It costs 12KB
+  per player relayed to every other client; `2` serves them from
+  `avatars/<steamid64>.rgb` on the server instead.
 
 ### Showing up in server queries
 
