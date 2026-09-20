@@ -174,6 +174,59 @@ Known limitations, worth understanding before relying on it:
   the two from interfering, but this is the part to watch first if something
   misbehaves.
 
+### Showing up in server queries
+
+Validating a client gets them into the game. It does not get them counted,
+because Steam's idea of who is on the server is built somewhere else entirely.
+
+The engine tells Steam about a player exactly twice. `BeginAuthSession` on its
+own session is what registers the user at all, and `BUpdateUserData`, called for
+every client from `CGameServer::UpdateMasterServerPlayers`, returns false for
+anyone that session has no auth session for. The human count is never sent as a
+number: `CSteam3Server::SendUpdatedServerDetails` sends the bot count and the
+max, and nothing else. So Steam's player list is precisely the set of users it
+holds an auth session for.
+
+A cross-appid client is in no such set. The engine's `BeginAuthSession` really
+did fail; only the answer it returned was overridden. Steam therefore reports
+the server as empty of them — in the master listing, and in the A2S replies
+steamclient writes itself, which is every A2S reply once `host_info_show` and
+`host_players_show` are `2` and the engine stops answering them:
+
+```cpp
+// We don't understand it, let the master server updater at it.
+Steam3Server().SteamGameServer()->HandleIncomingPacket( ... );
+```
+
+A server whose players are all cross-appid looks like nobody is on it.
+
+So each one is introduced to the engine's session separately, as an
+unauthenticated connection — the documented way to list a player Steam did not
+vet, and what bots were advertised with before `SetBotPlayerCount` existed. The
+SteamID that comes back is remembered against the real one, and
+`BUpdateUserData` is rewritten to carry it. Count, name and score then come out
+right everywhere, because everything reads that one set.
+
+Nothing is created until the engine actually advertises the client, which it
+only does once they are in the game, so a client that connects and is rejected
+never leaves anything behind. The connection is retired when the engine ends its
+own auth session for that client, which `CSteam3Server::NotifyClientDisconnect`
+does for every client that had a valid SteamID, and on unload.
+
+What this costs: the identity Steam files them under is synthetic, so a friend
+looking at their profile does not see this server. Nothing in a query shows it,
+and bans, the duplicate-SteamID check and the reject path are all unaffected —
+those run through the engine, on the real SteamID, as above.
+
+`CreateUnauthenticatedUserConnection`, `SendUserDisconnect` and
+`BUpdateUserData` are the deprecated half of `ISteamGameServer`, kept at the
+tail of v014 after the calls that replaced them. Their slots are read out of the
+engine the same way every other slot here is: `UpdateMasterServerPlayers` ends
+in `call [edi+0A4h]`, which is `BUpdateUserData` at 41 and fixes the two below
+it. Being deprecated, they may one day stop doing anything; if Steam declines to
+open a connection the plugin says so once and stops asking, and the server is
+left exactly as it was before any of this.
+
 ## Usage
 
 Drop both files in `csgo/addons/`:

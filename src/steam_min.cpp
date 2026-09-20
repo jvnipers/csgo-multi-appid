@@ -47,10 +47,12 @@ struct GameServerVersion_t
 	const char	*pszVersion;
 	int			nBeginAuthSessionSlot;
 	int			nLogOffSlot;
+	int			nEndAuthSessionSlot;
+	int			nBUpdateUserDataSlot;
 };
 
 const GameServerVersion_t kGameServerVersions[] = {
-	{ "SteamGameServer014", 26, 7 },
+	{ "SteamGameServer014", 26, 7, 27, 41 },
 };
 
 const GameServerVersion_t *s_pVersion;
@@ -152,6 +154,18 @@ int LogOffSlot()
 {
 	ResolveVersion();
 	return s_pVersion ? s_pVersion->nLogOffSlot : -1;
+}
+
+int EndAuthSessionSlot()
+{
+	ResolveVersion();
+	return s_pVersion ? s_pVersion->nEndAuthSessionSlot : -1;
+}
+
+int BUpdateUserDataSlot()
+{
+	ResolveVersion();
+	return s_pVersion ? s_pVersion->nBUpdateUserDataSlot : -1;
 }
 
 bool Api::Load()
