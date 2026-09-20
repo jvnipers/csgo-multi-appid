@@ -1,6 +1,6 @@
 # csgo-multi-appid
 
-A **100% vibe coded** Valve server plugin that pins the CS:GO dedicated server's Steam appid, 
+A **100% vibe coded** Valve server plugin that pins the CS:GO dedicated server's Steam appid,
 so the server behaves identically no matter what `csgo/steam.inf` says.
 
 ## Why
