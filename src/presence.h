@@ -32,6 +32,10 @@ namespace presence
 // advertises one that is in the game.
 void Add( uint64_t steamID );
 
+// Drops clients the engine asked Steam about and then turned away. Cheap, and
+// meant to be called every frame.
+void Expire();
+
 // The SteamID BUpdateUserData should carry for this client, or 0 to leave the
 // call alone. Opens the Steam-side connection the first time it is asked for.
 uint64_t Substitute( void *pEngineInterface, uint64_t steamID );
@@ -46,6 +50,7 @@ void Clear( void *pEngineInterface );
 
 // For when the hooks this depends on could not be installed. Listing a client
 // without the signal that retires them again would leave the server advertising
-// players who have left, so it does nothing at all instead.
-void Disable();
+// players who have left, so it gives up anything it already holds and opens
+// nothing further.
+void Disable( void *pEngineInterface );
 }

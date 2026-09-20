@@ -129,7 +129,13 @@ void *PatchSlot( void **pVTable, int nSlot, void *pHook, void *pKnown )
 	if ( s_nPatches >= kMaxPatches )
 		return nullptr;
 
+	// The original doubles as this function's answer, so an empty slot would
+	// report failure having already installed a hook with nothing behind it.
+	// No vtable has one; refusing is still cheaper than the crash.
 	void *pOriginal = *ppSlot;
+	if ( !pOriginal )
+		return nullptr;
+
 	if ( pKnown && pOriginal != pKnown )
 		return nullptr;
 
@@ -201,7 +207,7 @@ bool InstallHook( steam::ISteamGameServer *pServer )
 
 	if ( !pUserData || !pEndAuth )
 	{
-		presence::Disable();
+		presence::Disable( validator::EngineInterface() );
 		Complain( s_bWarnedPresence,
 				  "csgo-multi-appid: could not install the player-data hooks;"
 				  " cross-appid clients will play but stay invisible in server queries\n" );
@@ -341,6 +347,7 @@ void Tick()
 	Setup();
 
 	validator::Pump();
+	presence::Expire();
 }
 
 void Shutdown()
