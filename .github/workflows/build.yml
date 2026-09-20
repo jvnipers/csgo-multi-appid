@@ -19,7 +19,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
           fetch-tags: true
@@ -71,7 +71,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup xmake
         uses: xmake-io/github-action-setup-xmake@v1
@@ -96,7 +96,7 @@ jobs:
           cp csgo-multi-appid.vdf package/addons/
 
       - name: Upload plugin
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: csgo-multi-appid-windows
           path: ./package
@@ -114,7 +114,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup xmake
         uses: xmake-io/github-action-setup-xmake@v1
@@ -143,7 +143,7 @@ jobs:
           cp csgo-multi-appid.vdf package/addons/
 
       - name: Upload plugin
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: csgo-multi-appid-linux
           path: ./package
@@ -157,14 +157,14 @@ jobs:
     needs: [version, windows, linux]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: csgo-multi-appid-windows
           path: windows
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: csgo-multi-appid-linux
           path: linux
@@ -181,7 +181,7 @@ jobs:
           (cd combined && zip -r ../releases/csgo-multi-appid.zip .)
 
       - name: Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ needs.version.outputs.version }}
           name: ${{ needs.version.outputs.version }}

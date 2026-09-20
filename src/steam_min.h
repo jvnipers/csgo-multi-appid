@@ -37,6 +37,15 @@ const char *const kSteamClientVersion = "SteamClient017";
 // is made for it having dropped InitGameServer from the published interface
 // without the implementation losing the slot -- every slot below is one higher
 // than that header's.
+//
+// The four calls that survive at the end of v014, after the ones that replaced
+// them, are pinned the same way: CGameServer::UpdateMasterServerPlayers ends in
+// `call [edi+0A4h]`, 0xA4 / 4 = 41, which is BUpdateUserData, and that fixes
+// the three above it. Everything in between lines up with the header too --
+// CSteam3Server::SendUpdatedServerDetails calls slots 13, 12, 16, 23, 14, 15,
+// 17 and 18 in that order, UpdateMasterServerRules calls 19, and the heartbeat
+// toggle calls 24.
+
 // Whether the Steam modules this needs are loaded at all. False early on: the
 // engine only loads steamclient when it activates its own game server session,
 // which is at map load, long after plugins.
@@ -45,6 +54,8 @@ bool ModulesReady();
 const char *GameServerVersion();
 int BeginAuthSessionSlot();
 int LogOffSlot();
+int EndAuthSessionSlot();
+int BUpdateUserDataSlot();
 
 const int kEAccountTypeGameServer = 3;
 
@@ -103,6 +114,20 @@ struct CallbackMsg_t
 };
 #pragma pack( pop )
 
+// A CSteamID passed by value is just eight bytes on the stack, which is why
+// every steamID parameter below is a uint64_t. Returning one is not the same
+// question: MSVC hands back an eight-byte class in edx:eax unless it has a
+// user-provided constructor, which CSteamID has, and the i386 SysV ABI returns
+// every class through a hidden pointer. Mirroring the constructor gets the same
+// answer out of both compilers as steamclient was built with, so the one call
+// below that returns a CSteamID is left to the compiler rather than hand-rolled.
+struct SteamIDValue
+{
+	SteamIDValue() : m_ullValue( 0 ) {}
+	uint64_t m_ullValue;
+};
+static_assert( sizeof( SteamIDValue ) == sizeof( uint64_t ), "CSteamID is eight bytes" );
+
 class ISteamGameServer
 {
 public:
@@ -135,6 +160,20 @@ public:
 	virtual void	_GetAuthSessionTicket() = 0;						// 25
 	virtual EBeginAuthSessionResult BeginAuthSession( const void *pAuthTicket, int cbAuthTicket, uint64_t steamID ) = 0; // 26
 	virtual void	EndAuthSession( uint64_t steamID ) = 0;				// 27
+	virtual void	_CancelAuthTicket() = 0;							// 28
+	virtual void	_UserHasLicenseForApp() = 0;						// 29
+	virtual void	_RequestUserGroupStatus() = 0;						// 30
+	virtual void	_GetGameplayStats() = 0;							// 31
+	virtual void	_GetServerReputation() = 0;							// 32
+	virtual void	_GetPublicIP() = 0;									// 33
+	virtual void	_HandleIncomingPacket() = 0;						// 34
+	virtual void	_GetNextOutgoingPacket() = 0;						// 35
+	virtual void	_AssociateWithClan() = 0;							// 36
+	virtual void	_ComputeNewPlayerCompatibility() = 0;				// 37
+	virtual void	_SendUserConnectAndAuthenticate() = 0;				// 38
+	virtual SteamIDValue CreateUnauthenticatedUserConnection() = 0;		// 39
+	virtual void	SendUserDisconnect( uint64_t steamID ) = 0;			// 40
+	virtual bool	BUpdateUserData( uint64_t steamID, const char *pchPlayerName, uint32_t uScore ) = 0; // 41
 };
 
 class ISteamClient

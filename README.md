@@ -1,6 +1,6 @@
 # csgo-multi-appid
 
-A **100% vibe coded** Valve server plugin that pins the CS:GO dedicated server's Steam appid, 
+A **100% vibe coded** Valve server plugin that pins the CS:GO dedicated server's Steam appid,
 so the server behaves identically no matter what `csgo/steam.inf` says.
 
 ## Why
@@ -173,6 +173,102 @@ Known limitations, worth understanding before relying on it:
   and per-pipe dispatch (`Steam_BGetCallback` on our pipe only) is what keeps
   the two from interfering, but this is the part to watch first if something
   misbehaves.
+- **Set `sv_reliableavatardata 1`**, or players see each other as the question
+  mark avatar across the appid divide. It defaults to `0`, and at `0` a client
+  resolves other players' avatars through its own Steam client, which only has a
+  stranger's persona cached when Steam thinks they share a context — being on
+  the same game server being the one that would apply. A cross-appid client is
+  not on this server's Steam roster under its real account, because that is the
+  very thing `BeginAuthSession` refused, so neither side gets the other's
+  persona. At `1` the avatar travels as a `CNETMsg_PlayerAvatarData` through the
+  game server instead, keyed by account ID, and the client prefers that over
+  asking Steam. Nothing in that path knows what appid anyone is. It costs 12KB
+  per player relayed to every other client; `2` serves them from
+  `avatars/<steamid64>.rgb` on the server instead.
+
+### Showing up in server queries
+
+Validating a client gets them into the game. It does not get them counted,
+because Steam's idea of who is on the server is built somewhere else entirely.
+
+The engine tells Steam about a player exactly twice. `BeginAuthSession` on its
+own session is what registers the user at all, and `BUpdateUserData`, called for
+every client from `CGameServer::UpdateMasterServerPlayers`, returns false for
+anyone that session has no auth session for. The human count is never sent as a
+number: `CSteam3Server::SendUpdatedServerDetails` sends the bot count and the
+max, and nothing else. So Steam's player list is precisely the set of users it
+holds an auth session for.
+
+A cross-appid client is in no such set. The engine's `BeginAuthSession` really
+did fail; only the answer it returned was overridden. Steam therefore reports
+the server as empty of them — in the master listing, and in the A2S replies
+steamclient writes itself, which is every A2S reply once `host_info_show` and
+`host_players_show` are `2` and the engine stops answering them:
+
+```cpp
+// We don't understand it, let the master server updater at it.
+Steam3Server().SteamGameServer()->HandleIncomingPacket( ... );
+```
+
+A server whose players are all cross-appid looks like nobody is on it.
+
+So each one is introduced to the engine's session separately, as an
+unauthenticated connection. That is not a trick: it is what the engine does for
+every client Steam cannot vouch for, including its own bots, in
+`CSteam3Server::NotifyLocalClientConnect`:
+
+```cpp
+steamID = SteamGameServer()->CreateUnauthenticatedUserConnection();
+```
+
+The SteamID that comes back is remembered against the real one, and
+`BUpdateUserData` is rewritten to carry it. Count, name and score then come out
+right everywhere, because everything reads that one set.
+
+Nothing is created until the engine actually advertises the client, which it
+only does once they are in the game, so a client that connects and is rejected
+never leaves anything behind. The connection is retired when the engine ends its
+own auth session for that client, which `CSteam3Server::NotifyClientDisconnect`
+does for every client that had a valid SteamID, and on unload.
+
+What this costs: the identity Steam files them under is synthetic, so a friend
+looking at their profile does not see this server. Nothing in a query shows it,
+and bans, the duplicate-SteamID check and the reject path are all unaffected —
+those run through the engine, on the real SteamID, as above.
+
+`CreateUnauthenticatedUserConnection`, `SendUserDisconnect` and
+`BUpdateUserData` are the deprecated half of `ISteamGameServer`, kept at the
+tail of v014 after the calls that replaced them. Their slots are read out of the
+engine the same way every other slot here is: `UpdateMasterServerPlayers` ends
+in `call [edi+0A4h]`, which is `BUpdateUserData` at 41 and fixes the two below
+it. Being deprecated, they may one day stop doing anything; if Steam declines to
+open a connection the plugin says so once and stops asking, and the server is
+left exactly as it was before any of this.
+
+### Which responder answers, and what it costs
+
+None of this is visible while the engine is the one answering. Two cvars decide
+that, and neither is the plugin's to set:
+
+| | `host_info_show 1` | `host_info_show 2` |
+| --- | --- | --- |
+| who writes `A2S_INFO` | the engine | steamclient |
+| player count | humans only, bots excluded | the tracked set, bots included |
+| the same count on the master | never updated, stays at zero | correct |
+
+`2` is what a server that wants to be found should run. The zero at `1` has
+nothing to do with appids — a server with only native players shows it too,
+because the engine answers the query itself and steamclient's record, which is
+what the master listing reflects, never hears about it.
+
+The bots being counted at `2` is the same story from the other end.
+steamclient's count is the size of its tracked set, and the engine's own bots
+are in that set by the call above, so they count as players; the engine's reply
+deliberately skips them (`if ( pi->fakeplayer ) continue;`). Both numbers are
+Valve's, they disagree, and a server with permanent bots looks permanently
+occupied under `2`. Nothing here changes either one: a cross-appid client is
+simply in the tracked set now, the same as a native client and the same as a
+bot.
 
 ## Usage
 
