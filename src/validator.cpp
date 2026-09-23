@@ -120,19 +120,6 @@ void HandleCallback( const steam::CallbackMsg_t &msg )
 	Retire( p->m_SteamID );
 }
 
-// CreateLocalUser holds steamclient's process-wide lock for the whole call and
-// is marked NOT THREADSAFE, and a server has hung on its first attempt right
-// after the engine's own logon started. Waiting for that logon to finish keeps
-// the call clear of the startup burst.
-bool EngineLoggedOn()
-{
-	if ( !s_Steam.Load() )
-		return false;
-
-	steam::ISteamGameServer *pEngine = s_Steam.EngineGameServer();
-	return pEngine && pEngine->BLoggedOn();
-}
-
 bool TryStart()
 {
 	if ( !s_Steam.Load() )
@@ -236,10 +223,6 @@ bool Start()
 	// Being called before the engine has loaded steamclient is the normal case
 	// at plugin load, not a failure: it costs no attempt and says nothing.
 	if ( !steam::ModulesReady() )
-		return false;
-
-	// Neither does waiting for the engine's logon.
-	if ( !EngineLoggedOn() )
 		return false;
 
 	const time_t now = time( nullptr );
