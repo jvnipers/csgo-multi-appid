@@ -227,10 +227,10 @@ void StopValidator()
 	s_bValidatorStarted = false;
 }
 
-// Everything the feature needs, done as early as it can be done. Nothing here
-// waits on the engine's own Steam session: the validator builds its own, and
-// the vtable being patched belongs to steamclient's adapter class rather than
-// to any one instance of it.
+// Everything the feature needs, done as early as it can be done. The validator
+// builds its own Steam session, but only once the engine's has logged on (see
+// validator::Start); the vtable being patched belongs to steamclient's adapter
+// class rather than to any one instance of it.
 void Setup()
 {
 	if ( s_bBroken )
